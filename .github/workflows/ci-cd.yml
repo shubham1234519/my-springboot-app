@@ -1,0 +1,56 @@
+name: CI-CD Pipeline with AWS ECR
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Build with Maven
+        run: mvn clean install -DskipTests
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build Docker image
+        run: |
+          docker build -t springboot-app .
+          docker tag springboot-app:latest 692701344484.dkr.ecr.ap-south-1.amazonaws.com/springboot-app:latest
+
+      - name: Push Docker image to ECR
+        run: |
+          docker push 692701344484.dkr.ecr.ap-south-1.amazonaws.com/springboot-app:latest
+
+      - name: SSH and Deploy on EC2
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 692701344484.dkr.ecr.ap-south-1.amazonaws.com
+            docker pull 692701344484.dkr.ecr.ap-south-1.amazonaws.com/springboot-app:latest
+            docker stop springboot-app || true
+            docker rm springboot-app || true
+            docker run -d --name springboot-app -p 8080:8080 692701344484.dkr.ecr.ap-south-1.amazonaws.com/springboot-app:latest
