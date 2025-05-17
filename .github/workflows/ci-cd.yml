@@ -49,8 +49,20 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            echo "Logging in to Amazon ECR..."
             aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 692701344484.dkr.ecr.ap-south-1.amazonaws.com
+
+            echo "Pulling latest Docker image from ECR..."
             docker pull 692701344484.dkr.ecr.ap-south-1.amazonaws.com/springboot-app:latest
+
+            echo "Stopping any existing container..."
             docker stop springboot-app || true
+
+            echo "Removing old container..."
             docker rm springboot-app || true
+
+            echo "Running new container..."
             docker run -d --name springboot-app -p 8080:8080 692701344484.dkr.ecr.ap-south-1.amazonaws.com/springboot-app:latest
+
+            echo "Deployment completed successfully."
+      
